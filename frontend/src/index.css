@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.font-display { font-family: 'Space Grotesk', sans-serif; }
+.font-body { font-family: 'Inter', sans-serif; }
+.font-mono-ui { font-family: 'JetBrains Mono', monospace; }
+
+/* ── Shimmer Button animations (Tailwind v4 @utility — fixes var(--speed) scoping) ── */
+@utility animate-shimmer-slide {
+  animation: shimmer-slide var(--speed) ease-in-out infinite alternate;
+}
+
+@utility animate-spin-around {
+  animation: spin-around calc(var(--speed) * 2) infinite linear;
+}
+
+@keyframes spin-around {
+  0%           { transform: translateZ(0) rotate(0); }
+  15%, 35%     { transform: translateZ(0) rotate(90deg); }
+  65%, 85%     { transform: translateZ(0) rotate(270deg); }
+  100%         { transform: translateZ(0) rotate(360deg); }
+}
+
+@keyframes shimmer-slide {
+  to { transform: translate(calc(100cqw - 100%), 0); }
+}
