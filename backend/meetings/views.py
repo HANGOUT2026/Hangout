@@ -157,8 +157,6 @@ def delete_note(request, note_id):
     return JsonResponse({"error": "Invalid method"}, status=405)
 
 def validate_room(request, room_id):
-    # Check if the room exists in the database
-    if Room.objects.filter(room_id=room_id).exists():
-        return JsonResponse({'exists': True}, status=200)
-    else:
-        return JsonResponse({'exists': False, 'error': 'Invalid Room Code'}, status=404)
+    # Automatically create the room if it doesn't exist yet so people can join new calls
+    actual_room, created = Room.objects.get_or_create(room_id=room_id)
+    return JsonResponse({'exists': True}, status=200)
