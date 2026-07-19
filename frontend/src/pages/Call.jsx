@@ -82,6 +82,25 @@ export default function Call() {
         return Math.floor((Date.now() - start) / 1000);
     });
 
+    // --- Validation on mount ---
+    useEffect(() => {
+        const validateRoomOnMount = async () => {
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/validate-room/${roomId}/`);
+                if (!response.data.exists) {
+                    alert("This meeting does not exist.");
+                    navigate("/home");
+                }
+            } catch (err) {
+                alert("This meeting does not exist.");
+                navigate("/home");
+            }
+        };
+        if (roomId) {
+            validateRoomOnMount();
+        }
+    }, [roomId, navigate]);
+
     // --- Timers & UI Helpers ---
     useEffect(() => {
         const start = getCallStartTime();

@@ -181,7 +181,13 @@ export default function Home() {
     }
     
     if (joinCode && joinCode.trim() !== "") {
-      const roomToCheck = joinCode.trim();
+      let roomToCheck = joinCode.trim();
+      
+      // If the user pasted a full URL, extract the room ID
+      if (roomToCheck.includes("/call/")) {
+        const parts = roomToCheck.split("/call/");
+        roomToCheck = parts[parts.length - 1].replace(/\/$/, ""); // remove trailing slash if any
+      }
       
       try {
         const response = await axios.get(`${API_BASE_URL}/api/validate-room/${roomToCheck}/`);
