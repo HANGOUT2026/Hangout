@@ -38,6 +38,7 @@ export default function Call() {
     const mediaRecorderRef = useRef(null);
     const recordedChunksRef = useRef([]);
     const animationFrameIdRef = useRef(null);
+    const messagesRef = useRef([]);
 
     // --- 4. Application State ---
     const [isRecording, setIsRecording] = useState(false);
@@ -170,7 +171,11 @@ export default function Call() {
         const now = new Date();
         const time = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
         const msg = { from: "You", text: chatInput.trim(), time };
-        setMessages((m) => [...m, msg]);
+        setMessages((m) => {
+            const newM = [...m, msg];
+            messagesRef.current = newM;
+            return newM;
+        });
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'chat-message', text: chatInput.trim(), time, sender: myUsername }));
         }
@@ -763,6 +768,16 @@ export default function Call() {
                         }));
                         // Share our display name with the requester
                         wsRef.current.send(JSON.stringify({ type: 'display-name', displayName: sessionStorage.getItem('displayName') || username, sender: username, target: data.sender }));
+                        
+                        // Send our chat history so far
+                        if (messagesRef.current.length > 0) {
+                            wsRef.current.send(JSON.stringify({
+                                type: 'chat-history',
+                                history: messagesRef.current,
+                                sender: username,
+                                target: data.sender
+                            }));
+                        }
                         break;
                     case 'timer-sync': {
                         const currentStart = getCallStartTime();
@@ -776,7 +791,32 @@ export default function Call() {
                         handlePeerDisconnect(data.username || data.sender);
                         break;
                     case 'chat-message':
-                        setMessages((m) => [...m, { from: data.sender, text: data.text, time: data.time }]);
+                        setMessages((m) => {
+                            const newM = [...m, { from: data.sender, text: data.text, time: data.time }];
+                            messagesRef.current = newM;
+                            return newM;
+                        });
+                        break;
+                    case 'chat-history':
+                        setMessages((prev) => {
+                            const newMessages = [...prev];
+                            let changed = false;
+                            data.history.forEach(h => {
+                                const correctedFrom = h.from === "You" ? data.sender : h.from;
+                                const exists = newMessages.some(m => m.text === h.text && m.time === h.time && m.from === correctedFrom);
+                                if (!exists) {
+                                    newMessages.push({ ...h, from: correctedFrom });
+                                    changed = true;
+                                }
+                            });
+                            if (changed) {
+                                // Simple chronological sort assuming time format HH:MM
+                                newMessages.sort((a, b) => a.time.localeCompare(b.time));
+                                messagesRef.current = newMessages;
+                                return newMessages;
+                            }
+                            return prev;
+                        });
                         break;
                     case 'change-filter':
                         setPeerFilter(data.filter);
