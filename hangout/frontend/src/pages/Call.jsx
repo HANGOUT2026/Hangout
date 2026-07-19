@@ -1348,7 +1348,7 @@ export default function Call() {
                   </div>
                 </div>
               )}
-              {remoteStreams.filter(p => p.username !== activeScreenSharer).map((peer) => {
+              {remoteStreams.filter(p => p.peerId !== activeScreenSharer).map((peer) => {
                 const currentPeerFilterStyle = filters.find(f => f.id === peerFilter)?.style || "";
                 return (
                   <div key={peer.peerId} style={getCardStyle(true)}>
