@@ -1230,7 +1230,12 @@ export default function Call() {
                   <video
                     data-username={`${sharer.username} (Presenting)`}
                     autoPlay playsInline
-                    ref={(el) => { if (el && el.srcObject !== sharer.stream) el.srcObject = sharer.stream; }}
+                    ref={(el) => { 
+                        if (el && el.srcObject !== sharer.stream) {
+                            el.srcObject = sharer.stream; 
+                            el.play().catch(e => console.warn("Play error:", e));
+                        }
+                    }}
                     className={`${currentPeerFilterStyle} stage-video`}
                     style={{ width: "100%", height: "100%", objectFit: "fill" }}
                   />
@@ -1300,9 +1305,13 @@ export default function Call() {
                   <div key={peer.username} style={getCardStyle(true)}>
                     <video
                       data-username={peer.displayName || peer.username}
-                      autoPlay
-                      playsInline
-                      ref={(el) => { if (el && el.srcObject !== peer.stream) el.srcObject = peer.stream; }}
+                      autoPlay playsInline
+                      ref={(el) => { 
+                          if (el && el.srcObject !== peer.stream) {
+                              el.srcObject = peer.stream; 
+                              el.play().catch(e => console.warn("Play error:", e));
+                          }
+                      }}
                       className={`${currentPeerFilterStyle} sidebar-video`}
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: peer.isCameraOn !== false ? "block" : "none" }}
                     />
@@ -1322,9 +1331,13 @@ export default function Call() {
                 <div key={peer.username} style={getCardStyle()}>
                   <video
                     data-username={peer.displayName || peer.username}
-                    autoPlay
-                    playsInline
-                    ref={(el) => { if (el && el.srcObject !== peer.stream) el.srcObject = peer.stream; }}
+                    autoPlay playsInline
+                    ref={(el) => { 
+                        if (el && el.srcObject !== peer.stream) {
+                            el.srcObject = peer.stream; 
+                            el.play().catch(e => console.warn("Play error:", e));
+                        }
+                    }}
                     className={`${currentPeerFilterStyle} grid-video`}
                     style={{ width: "100%", height: "100%", objectFit: "cover", display: peer.isCameraOn !== false ? "block" : "none" }}
                   />
