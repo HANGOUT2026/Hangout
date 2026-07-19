@@ -21,6 +21,7 @@ def upload_recording(request):
         if not video_file or not room_uuid or not username_str:
             return JsonResponse({"error": "Missing required fields"}, status=400)
 
+        try:
             # 1. Dynamically fetch or create the user if they're authenticated via frontend
             actual_user, user_created = User.objects.get_or_create(username=username_str)
 
