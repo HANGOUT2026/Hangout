@@ -22,8 +22,8 @@ def upload_recording(request):
             return JsonResponse({"error": "Missing required fields"}, status=400)
 
         try:
-            # 1. Look up the user
-            actual_user = User.objects.get(username=username_str)
+            # 1. Dynamically fetch or create the user (to support Neon Auth users)
+            actual_user, _ = User.objects.get_or_create(username=username_str)
 
             # 2. FIXED: Dynamically fetch or create the room if it's a new link!
             actual_room, created = Room.objects.get_or_create(room_id=room_uuid)
@@ -43,11 +43,8 @@ def upload_recording(request):
 
 
 def get_user_recordings(request, username):
-    try:
-        # Fetch the actual user object first to filter relational recordings
-        actual_user = User.objects.get(username=username)
-    except User.DoesNotExist:
-        return JsonResponse({"error": "User not found"}, status=404)
+    # Fetch or create the user (to support Neon Auth users)
+    actual_user, _ = User.objects.get_or_create(username=username)
 
     # 1. Clean up expired records on-the-fly using the 'user' relational field
     expired_recordings = MeetingRecording.objects.filter(
@@ -111,7 +108,7 @@ def save_note(request):
             if not room_uuid or not username_str or content is None:
                 return JsonResponse({"error": "Missing required fields"}, status=400)
 
-            actual_user = User.objects.get(username=username_str)
+            actual_user, _ = User.objects.get_or_create(username=username_str)
             actual_room, created = Room.objects.get_or_create(room_id=room_uuid)
 
             note = MeetingNote.objects.create(
@@ -126,10 +123,7 @@ def save_note(request):
 
 
 def get_user_notes(request, username):
-    try:
-        actual_user = User.objects.get(username=username)
-    except User.DoesNotExist:
-        return JsonResponse({"error": "User not found"}, status=404)
+    actual_user, _ = User.objects.get_or_create(username=username)
 
     notes = MeetingNote.objects.filter(user=actual_user).order_by("-created_at")
     data = []
