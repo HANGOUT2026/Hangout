@@ -29,6 +29,7 @@ export default function Call() {
     const peerConnectionsRef = useRef({});
     const localStreamRef = useRef(null);
     const screenStreamRef = useRef(null);
+    const musicStreamRef = useRef(null);
     const screenSendersRef = useRef({}); // Track screen share senders per peer
     const wsRef = useRef(null);
     const localVideoRef = useRef(null);
@@ -382,6 +383,7 @@ export default function Call() {
 
             if (audioFileTrack) {
                 const musicStream = new MediaStream([audioFileTrack]);
+                musicStreamRef.current = musicStream;
                 Object.keys(peerConnectionsRef.current).forEach((username) => {
                     const pc = peerConnectionsRef.current[username];
                     pc.addTrack(audioFileTrack, musicStream);
@@ -402,6 +404,7 @@ export default function Call() {
             
             if (audioTrack) {
                 const sysAudioStream = new MediaStream([audioTrack]);
+                musicStreamRef.current = sysAudioStream;
                 // Add the audio track to all peers
                 Object.keys(peerConnectionsRef.current).forEach((username) => {
                     const pc = peerConnectionsRef.current[username];
@@ -411,6 +414,7 @@ export default function Call() {
                 wsRef.current?.send(JSON.stringify({ type: 'music-status', status: 'started', sender: myUsername }));
                 
                 audioTrack.onended = () => {
+                    musicStreamRef.current = null;
                     wsRef.current?.send(JSON.stringify({ type: 'music-status', status: 'stopped', sender: myUsername }));
                 };
             }
@@ -548,6 +552,13 @@ export default function Call() {
             });
         }
 
+        // If we are currently streaming music, add those tracks too
+        if (musicStreamRef.current) {
+            musicStreamRef.current.getTracks().forEach(track => {
+                pc.addTrack(track, musicStreamRef.current);
+            });
+        }
+
         // Handle incoming remote tracks
         pc.ontrack = (event) => {
             console.log("Track received from:", peerUsername, event.streams[0]);
@@ -569,6 +580,7 @@ export default function Call() {
                             if (!window[`aux_audio_${event.streams[0].id}`]) {
                                 window[`aux_audio_${event.streams[0].id}`] = true;
                                 const audio = new Audio();
+                                window[`aux_audio_obj_${event.streams[0].id}`] = audio; // Prevent GC
                                 audio.srcObject = event.streams[0];
                                 audio.play().catch(e => console.error("Aux audio play failed:", e));
                             }
