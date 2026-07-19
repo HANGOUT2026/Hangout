@@ -696,7 +696,7 @@ export default function Call() {
                         break;
                     }
                     case 'user-left':
-                        handlePeerDisconnect(data.sender);
+                        handlePeerDisconnect(data.sender || data.username);
                         break;
                     case 'chat-message':
                         setMessages((m) => [...m, { from: data.sender, text: data.text, time: data.time }]);
@@ -810,15 +810,28 @@ export default function Call() {
         }
     };
 
-    const handlePeerDisconnect = (leftUsername) => {
-        setNotification(`${leftUsername || "A participant"} has left the meeting`);
-        setTimeout(() => setNotification(""), 2000);
-        if (peerConnectionsRef.current[leftUsername]) {
-            peerConnectionsRef.current[leftUsername].close();
-            delete peerConnectionsRef.current[leftUsername];
+    const handlePeerDisconnect = (leftIdentifier) => {
+        if (!leftIdentifier) return;
+        
+        let actualPeerId = leftIdentifier;
+        
+        // Backwards compatibility with old backend that sends just the username
+        if (!leftIdentifier.includes('_')) {
+            const possibleId = Object.keys(peerConnectionsRef.current).find(id => id.startsWith(leftIdentifier + "_"));
+            if (possibleId) actualPeerId = possibleId;
         }
-        setRemoteStreams((prevStreams) => prevStreams.filter((item) => item.peerId !== leftUsername));
-        setActiveScreenSharer((prev) => prev === leftUsername ? null : prev);
+
+        const displayName = actualPeerId.split('_')[0] || "A participant";
+        setNotification(`${displayName} has left the meeting`);
+        setTimeout(() => setNotification(""), 2000);
+        
+        if (peerConnectionsRef.current[actualPeerId]) {
+            peerConnectionsRef.current[actualPeerId].close();
+            delete peerConnectionsRef.current[actualPeerId];
+        }
+        
+        setRemoteStreams((prevStreams) => prevStreams.filter((item) => item.peerId !== actualPeerId && !item.peerId.startsWith(leftIdentifier + "_")));
+        setActiveScreenSharer((prev) => (prev === actualPeerId || (prev && prev.startsWith(leftIdentifier + "_"))) ? null : prev);
     };
 
     // --- On-Mount Initializer ---
