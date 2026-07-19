@@ -675,12 +675,13 @@ export default function Call() {
                         initializePeerConnection(data.sender, true, username);
                         // Store the display name if provided
                         if (data.displayName) {
-                            setRemoteStreams((prev) =>
-                                prev.map(p => p.username === data.sender
-                                    ? { ...p, displayName: data.displayName }
-                                    : p
-                                )
-                            );
+                            setRemoteStreams((prev) => {
+                                const exists = prev.some(p => p.username === data.sender);
+                                if (exists) {
+                                    return prev.map(p => p.username === data.sender ? { ...p, displayName: data.displayName } : p);
+                                }
+                                return [...prev, { username: data.sender, displayName: data.displayName }];
+                            });
                         }
                         // Reply with our display name so the newcomer knows ours
                         wsRef.current.send(JSON.stringify({ type: 'display-name', displayName: sessionStorage.getItem('displayName') || username, sender: username, target: data.sender }));
@@ -771,14 +772,22 @@ export default function Call() {
                     case 'music-status':
                         break;
                     case 'display-name':
-                        setRemoteStreams((prev) =>
-                            prev.map(p => p.username === data.sender ? { ...p, displayName: data.displayName } : p)
-                        );
+                        setRemoteStreams((prev) => {
+                            const exists = prev.some(p => p.username === data.sender);
+                            if (exists) {
+                                return prev.map(p => p.username === data.sender ? { ...p, displayName: data.displayName } : p);
+                            }
+                            return [...prev, { username: data.sender, displayName: data.displayName }];
+                        });
                         break;
                     case 'media-status':
-                        setRemoteStreams((prev) => 
-                            prev.map(p => p.username === data.sender ? { ...p, isMicOn: data.isMicOn, isCameraOn: data.isCameraOn } : p)
-                        );
+                        setRemoteStreams((prev) => {
+                            const exists = prev.some(p => p.username === data.sender);
+                            if (exists) {
+                                return prev.map(p => p.username === data.sender ? { ...p, isMicOn: data.isMicOn, isCameraOn: data.isCameraOn } : p);
+                            }
+                            return [...prev, { username: data.sender, isMicOn: data.isMicOn, isCameraOn: data.isCameraOn }];
+                        });
                         break;
                 }
             } catch (error) {
