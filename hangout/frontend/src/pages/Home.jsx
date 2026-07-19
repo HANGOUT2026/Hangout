@@ -183,7 +183,11 @@ export default function Home() {
     }
     
     if (joinCode && joinCode.trim() !== "") {
-      const roomToCheck = joinCode.trim();
+      let roomToCheck = joinCode.trim();
+      if (roomToCheck.includes('/')) {
+        const parts = roomToCheck.split('/');
+        roomToCheck = parts[parts.length - 1];
+      }
       
       try {
         const response = await axios.get(`${API_URL}/api/validate-room/${roomToCheck}/`);

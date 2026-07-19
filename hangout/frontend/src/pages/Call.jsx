@@ -7,6 +7,27 @@ export default function Call() {
     const { roomId } = useParams();
     const navigate = useNavigate();
 
+    // --- 0. Dummy Track Generators ---
+    const createEmptyAudioTrack = useCallback(() => {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = ctx.createOscillator();
+        const dst = ctx.createMediaStreamDestination();
+        oscillator.connect(dst);
+        oscillator.start();
+        const track = dst.stream.getAudioTracks()[0];
+        track.enabled = false;
+        return track;
+    }, []);
+
+    const createEmptyVideoTrack = useCallback(({ width, height }) => {
+        const canvas = Object.assign(document.createElement('canvas'), { width, height });
+        canvas.getContext('2d').fillRect(0, 0, width, height);
+        const stream = canvas.captureStream();
+        const track = stream.getVideoTracks()[0];
+        track.enabled = false;
+        return track;
+    }, []);
+
     const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
     let rawWsUrl = import.meta.env.VITE_WS_URL || "ws://localhost:8000";
     if (rawWsUrl.startsWith("http://")) rawWsUrl = rawWsUrl.replace("http://", "ws://");
@@ -861,25 +882,39 @@ export default function Call() {
         sessionStorage.setItem(camKey, camEnabled);
         sessionStorage.setItem(micKey, micEnabled);
         
-        if (camEnabled || micEnabled) {
-            navigator.mediaDevices.getUserMedia({ video: camEnabled, audio: micEnabled })
-                .then((mediaStream) => {
-                    localStreamRef.current = mediaStream;
-                    if (localVideoRef.current) {
-                        localVideoRef.current.srcObject = mediaStream;
-                    }
-                    setIsCameraOn(camEnabled);
-                    setIsMicOn(micEnabled);
-                    connectWebSocket();
-                })
-                .catch(err => {
-                    console.error("Error accessing media constraints:", err);
-                    connectWebSocket(); // fallback to view-only
-                });
-        } else {
-            // View-only mode
+        const initMediaStream = async () => {
+            let stream = new MediaStream();
+            let effectiveCamEnabled = camEnabled;
+            let effectiveMicEnabled = micEnabled;
+            try {
+                if (camEnabled || micEnabled) {
+                    const mediaStream = await navigator.mediaDevices.getUserMedia({ video: camEnabled, audio: micEnabled });
+                    stream = mediaStream;
+                }
+            } catch (err) {
+                console.error("Error accessing media constraints:", err);
+                effectiveCamEnabled = false;
+                effectiveMicEnabled = false;
+            }
+            
+            // Ensure we ALWAYS have at least one video track and one audio track for WebRTC senders
+            if (stream.getVideoTracks().length === 0) {
+                stream.addTrack(createEmptyVideoTrack({ width: 640, height: 480 }));
+            }
+            if (stream.getAudioTracks().length === 0) {
+                stream.addTrack(createEmptyAudioTrack());
+            }
+
+            localStreamRef.current = stream;
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+            }
+            setIsCameraOn(effectiveCamEnabled);
+            setIsMicOn(effectiveMicEnabled);
             connectWebSocket();
-        }
+        };
+
+        initMediaStream();
 
         if (localAudioElementRef.current) {
             localAudioElementRef.current.volume = musicVolume;
