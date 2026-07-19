@@ -21,10 +21,17 @@ export default function Call() {
     
     
     // --- 2. Element References ---
-    const localVideoRef = useRef(null);
-    const wsRef = useRef(null);
+    const [activeFilter, setActiveFilter] = useState('none');
+    const [peerFilter, setPeerFilter] = useState('none');
+    const iceCandidateQueue = useRef({});
+    
+    // WebRTC References
+    const peerConnectionsRef = useRef({});
     const localStreamRef = useRef(null);
     const screenStreamRef = useRef(null);
+    const screenSendersRef = useRef({}); // Track screen share senders per peer
+    const wsRef = useRef(null);
+    const localVideoRef = useRef(null);
     const fileInputRef = useRef(null);
     const localAudioElementRef = useRef(new Audio());
     const mediaRecorderRef = useRef(null);
@@ -487,18 +494,33 @@ export default function Call() {
             localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current));
         }
 
+        // If we are currently screen sharing, add those tracks too
+        if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach(track => {
+                const sender = pc.addTrack(track, screenStreamRef.current);
+                if (!screenSendersRef.current[peerUsername]) screenSendersRef.current[peerUsername] = [];
+                screenSendersRef.current[peerUsername].push(sender);
+            });
+        }
+
         // Handle incoming remote tracks
         pc.ontrack = (event) => {
-            console.log("Track received from:", peerUsername, event.streams[0]); // CRITICAL: Check console
+            console.log("Track received from:", peerUsername, event.streams[0]);
             
             setRemoteStreams((prev) => {
                 const existingIndex = prev.findIndex(p => p.username === peerUsername);
                 if (existingIndex >= 0) {
                     const currentStream = prev[existingIndex].stream;
+                    const peerObj = prev[existingIndex];
                     
-                    // Handle auxiliary streams (e.g. streaming music)
+                    // Handle auxiliary streams (e.g. streaming music or screen share)
                     if (currentStream && currentStream.id !== event.streams[0].id) {
-                        if (event.track.kind === 'audio') {
+                        if (event.track.kind === 'video') {
+                            // This is likely the screen share stream
+                            const newArray = [...prev];
+                            newArray[existingIndex] = { ...peerObj, screenStream: event.streams[0] };
+                            return newArray;
+                        } else if (event.track.kind === 'audio') {
                             if (!window[`aux_audio_${event.streams[0].id}`]) {
                                 window[`aux_audio_${event.streams[0].id}`] = true;
                                 const audio = new Audio();
@@ -509,10 +531,10 @@ export default function Call() {
                         return prev; // Do not overwrite main stream
                     }
                     
-                    // Only update if the stream reference has changed (or was null)
+                    // Main stream update (camera/mic)
                     if (currentStream !== event.streams[0]) {
                         const newArray = [...prev];
-                        newArray[existingIndex] = { ...newArray[existingIndex], stream: event.streams[0] };
+                        newArray[existingIndex] = { ...peerObj, stream: event.streams[0] };
                         return newArray;
                     }
                     return prev;
@@ -738,31 +760,24 @@ export default function Call() {
 
                 Object.keys(peerConnectionsRef.current).forEach((username) => {
                     const pc = peerConnectionsRef.current[username];
-                    const senders = pc.getSenders();
-                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
                     
-                    let activeSender = videoSender;
-                    if (videoSender) { 
-                        videoSender.replaceTrack(screenVideoTrack); 
-                    } else {
-                        activeSender = pc.addTrack(screenVideoTrack, localStreamRef.current || screenStream);
+                    // Create separate senders for the screen share stream
+                    const videoSender = pc.addTrack(screenVideoTrack, screenStream);
+                    let audioSender = null;
+                    if (screenAudioTrack) {
+                        audioSender = pc.addTrack(screenAudioTrack, screenStream);
                     }
+                    
+                    screenSendersRef.current[username] = [videoSender, audioSender].filter(Boolean);
 
                     // Boost bitrate to maximize quality over WebRTC
-                    if (activeSender) {
-                        try {
-                            const params = activeSender.getParameters();
-                            if (!params.encodings) params.encodings = [{}];
-                            params.encodings[0].maxBitrate = 5000000; // 5 Mbps
-                            activeSender.setParameters(params);
-                        } catch (e) {
-                            console.warn("Could not set maxBitrate on screen share", e);
-                        }
-                    }
-                    
-                    if (screenAudioTrack) {
-                        const sysAudioStream = new MediaStream([screenAudioTrack]);
-                        pc.addTrack(screenAudioTrack, sysAudioStream);
+                    try {
+                        const params = videoSender.getParameters();
+                        if (!params.encodings) params.encodings = [{}];
+                        params.encodings[0].maxBitrate = 5000000; // 5 Mbps
+                        videoSender.setParameters(params);
+                    } catch (e) {
+                        console.warn("Could not set maxBitrate on screen share", e);
                     }
                 });
 
@@ -780,21 +795,13 @@ export default function Call() {
     const stopScreenSharing = async () => {
         if (screenStreamRef.current) { screenStreamRef.current.getTracks().forEach(track => track.stop()); screenStreamRef.current = null; }
         
-        const cameraVideoTrack = localStreamRef.current ? localStreamRef.current.getVideoTracks()[0] : null;
         Object.keys(peerConnectionsRef.current).forEach((username) => {
             const pc = peerConnectionsRef.current[username];
-            const senders = pc.getSenders();
-            const videoSender = senders.find(s => s.track && s.track.kind === 'video');
-            if (videoSender) { 
-                if (cameraVideoTrack) {
-                    videoSender.replaceTrack(cameraVideoTrack); 
-                } else {
-                    pc.removeTrack(videoSender);
-                }
-            }
-            senders.filter(s => s.track && s.track.readyState === 'ended' && s.track.kind === 'audio').forEach(s => {
-                try { pc.removeTrack(s); } catch(e) { console.error(e); }
+            const senders = screenSendersRef.current[username] || [];
+            senders.forEach(sender => {
+                try { pc.removeTrack(sender); } catch(e) { console.error(e); }
             });
+            delete screenSendersRef.current[username];
         });
         
         if (localVideoRef.current && localStreamRef.current) { 
@@ -1222,11 +1229,13 @@ export default function Call() {
               (() => {
                 const sharer = remoteStreams.find(p => p.username === activeScreenSharer);
                 const currentPeerFilterStyle = filters.find(f => f.id === peerFilter)?.style || "";
-                return sharer ? (
+                // Use screenStream if available, fallback to regular stream
+                const renderStream = sharer?.screenStream || sharer?.stream;
+                return renderStream ? (
                   <video
                     data-username={`${sharer.username} (Presenting)`}
                     autoPlay playsInline
-                    ref={(el) => { if (el && el.srcObject !== sharer.stream) el.srcObject = sharer.stream; }}
+                    ref={(el) => { if (el && el.srcObject !== renderStream) el.srcObject = renderStream; }}
                     className={`${currentPeerFilterStyle} stage-video`}
                     style={{ width: "100%", height: "100%", objectFit: "fill" }}
                   />
