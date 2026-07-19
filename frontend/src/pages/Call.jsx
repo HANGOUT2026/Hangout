@@ -27,6 +27,7 @@ export default function Call() {
     
     // WebRTC References
     const peerConnectionsRef = useRef({});
+    const dataChannelsRef = useRef({});
     const localStreamRef = useRef(null);
     const screenStreamRef = useRef(null);
     const musicStreamRef = useRef(null);
@@ -179,16 +180,34 @@ export default function Call() {
             return newM;
         });
         
+        const payload = JSON.stringify({ 
+            type: 'chat-message', 
+            text: chatInput.trim(), 
+            time, 
+            sender: currentSender
+        });
+
+        // 1. Try sending over WebRTC DataChannels for zero latency
+        Object.keys(dataChannelsRef.current).forEach((peerUsername) => {
+            const dc = dataChannelsRef.current[peerUsername];
+            if (dc && dc.readyState === 'open') {
+                dc.send(payload);
+            }
+        });
+
+        // 2. Fallback to WebSocket only for peers whose DataChannel isn't open
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            // Send explicitly targeted messages to guarantee delivery bypassing any broadcast filters
             Object.keys(peerConnectionsRef.current).forEach((peerUsername) => {
-                wsRef.current.send(JSON.stringify({ 
-                    type: 'chat-message', 
-                    text: chatInput.trim(), 
-                    time, 
-                    sender: currentSender,
-                    target: peerUsername
-                }));
+                const dc = dataChannelsRef.current[peerUsername];
+                if (!dc || dc.readyState !== 'open') {
+                    wsRef.current.send(JSON.stringify({ 
+                        type: 'chat-message', 
+                        text: chatInput.trim(), 
+                        time, 
+                        sender: currentSender,
+                        target: peerUsername
+                    }));
+                }
             });
         }
         setChatInput("");
@@ -654,10 +673,33 @@ export default function Call() {
 
         peerConnectionsRef.current[peerUsername] = pc;
 
+        const setupDataChannel = (channel, peerUsername) => {
+            channel.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'chat-message') {
+                        setMessages((m) => {
+                            const newM = [...m, { from: data.sender, text: data.text, time: data.time }];
+                            messagesRef.current = newM;
+                            return newM;
+                        });
+                    }
+                } catch (e) {
+                    console.error("DataChannel parse error:", e);
+                }
+            };
+            dataChannelsRef.current[peerUsername] = channel;
+        };
+
         if (isCaller) {
-            // Force negotiation even if no tracks are present initially
-            pc.createDataChannel("hangout-data");
+            // Setup DataChannel for peer-to-peer chat
+            const dc = pc.createDataChannel("hangout-chat");
+            setupDataChannel(dc, peerUsername);
         }
+
+        pc.ondatachannel = (event) => {
+            setupDataChannel(event.channel, peerUsername);
+        };
         return pc;
     };
 
