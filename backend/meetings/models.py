@@ -18,11 +18,13 @@ class Room(models.Model):
         return self.room_id
 
 
+from cloudinary_storage.storage import VideoMediaCloudinaryStorage
+
 class MeetingRecording(models.Model):
     # Relational foreign keys linked directly to your models
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="recordings")
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name="recordings")
-    video_file = models.FileField(upload_to="recordings/")
+    video_file = models.FileField(upload_to="recordings/", storage=VideoMediaCloudinaryStorage())
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(default=fifteen_days_from_now)
 

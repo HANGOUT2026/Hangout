@@ -51,6 +51,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "channels",
     "meetings",
+    "cloudinary",
+    "cloudinary_storage",
 ]
 
 MIDDLEWARE = [
@@ -139,3 +141,12 @@ STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 # Media files configuration (For uploaded meeting recording assets)
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+# Cloudinary Storage Configuration
+if not os.environ.get("CLOUDINARY_URL"):
+    # Dummy config to prevent crashes during local manage.py commands
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': 'dummy',
+        'API_KEY': 'dummy',
+        'API_SECRET': 'dummy',
+    }
